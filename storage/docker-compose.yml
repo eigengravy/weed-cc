@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  storage_manager:
+    build:
+      context: ./storage_manager
+    container_name: storage_manager
+    ports:
+      - "8080:8080" # For any potential APIs
+    depends_on:
+      - storage_target1
+      - storage_target2
+    environment:
+      RUST_LOG: "info"
+
+  storage_target1:
+    build:
+      context: ./storage_target
+    container_name: storage_target1
+    environment:
+      TARGET_ID: "1"
+      FILE_PATH: "target1.csv"
+      RUST_LOG: "info"
+    volumes:
+      - ./data/target1:/data
+
+  storage_target2:
+    build:
+      context: ./storage_target
+    container_name: storage_target2
+    environment:
+      TARGET_ID: "2"
+      FILE_PATH: "target2.csv"
+      RUST_LOG: "info"
+    volumes:
+      - ./data/target2:/data
