@@ -42,3 +42,12 @@ services:
     volumes:
       - ./storage_target:/storage_data
     network_mode: "host"  # Use host network mode
+  flagged-transaction-processor:
+    build: .
+    command: python flagged_transaction_processor.py
+    volumes:
+      - .:/app  # Mount the current directory to the container
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
+    network_mode: "host"  # Use the host network for the container
