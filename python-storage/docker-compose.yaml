@@ -1,0 +1,44 @@
+services:
+  # Main FastAPI app (ObjectStorageManager)
+  fastapi-app:
+    build: .
+    command: uvicorn object_storage_manager:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"  # Exposing port 8000 on the host
+    volumes:
+      - .:/app  # Mount the current directory to the container for file access
+    network_mode: "host"  # Use host network mode
+    depends_on:
+      - storage_target_1
+      - storage_target_2
+      - storage_target_3
+
+  # Storage Target 1
+  storage_target_1:
+    build: .
+    command: uvicorn storage_target:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"  # Exposing port 8001 on the host
+    volumes:
+      - ./storage_target:/storage_data
+    network_mode: "host"  # Use host network mode
+
+  # Storage Target 2
+  storage_target_2:
+    build: .
+    command: uvicorn storage_target:app --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"  # Exposing port 8002 on the host
+    volumes:
+      - ./storage_target:/storage_data
+    network_mode: "host"  # Use host network mode
+
+  # Storage Target 3
+  storage_target_3:
+    build: .
+    command: uvicorn storage_target:app --host 0.0.0.0 --port 8003
+    ports:
+      - "8003:8003"  # Exposing port 8003 on the host
+    volumes:
+      - ./storage_target:/storage_data
+    network_mode: "host"  # Use host network mode
