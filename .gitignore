@@ -1,1 +1,5 @@
 **/*.csv
+venv/
+**/ml_venv/
+
+__pycache__/

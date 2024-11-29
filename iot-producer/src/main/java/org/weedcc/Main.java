@@ -11,7 +11,7 @@ import java.util.Properties;
 public class Main {
     public static void main(String[] args) {
         String bootstrapServers = "192.168.171.249:9093"; // Update if needed
-        String topicName = "csv-topic";
+        String topicName = "card-transactions";
 
         Properties properties = new Properties();
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
