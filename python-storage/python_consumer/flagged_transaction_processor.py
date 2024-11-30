@@ -84,7 +84,7 @@ async def fetch_and_summarize():
                     print("file", file_data)
                     transaction_count += len(file_data)
 
-                print(f"Summary: {transaction_count} transactions in the last 30 minutes.")
+                print(f"Summary: {transaction_count} transactions in the last 3 minutes.")
         except Exception as e:
             print(f"Error fetching or summarizing files: {e}")
 
