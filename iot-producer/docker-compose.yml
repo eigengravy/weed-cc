@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  kafka-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      BOOTSTRAP_SERVERS: "10.8.1.96:29092"
+      PRODUCER_FILE: "fraudTest.csv"
+      INTERVAL: "1"
+    command:
+      [
+        "--file", "${PRODUCER_FILE}",
+        "--bootstrap-servers", "${BOOTSTRAP_SERVERS}",
+        "--interval", "${INTERVAL}",
+        "--create"
+      ]
+    restart: always
+    network_mode: host  # Use host network
