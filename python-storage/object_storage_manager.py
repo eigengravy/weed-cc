@@ -26,7 +26,7 @@ def get_file_name(current_time):
 
 # Define a model for the CSV row data
 class CSVRow(BaseModel):
-    data: str  # Assuming each row is just a string of data (you can modify as needed)
+    data: dict  # Assuming each row is just a string of data (you can modify as needed)
 
 # Object Storage Manager (OSM) class
 class ObjectStorageManager:
@@ -36,6 +36,7 @@ class ObjectStorageManager:
         self.last_prefetch_time = time.time()
         self.prefetched_files = {} # file_name : data
         self.metadata = self._load_metadata()
+        self.latest_file = None
 
     def _load_metadata(self):
         """Load metadata from the JSON file."""
@@ -56,25 +57,11 @@ class ObjectStorageManager:
             return random.sample(STORAGE_TARGETS, 2)
         return targets[0]
 
-    async def distribute_data(self, data: str):
+    async def distribute_data(self, data: dict):
         """Distribute data to two storage targets via HTTP POST."""
         # Choose two random storage targets for this data chunk
         current_time = datetime.now()
-        latest_file = self.metadata[-1] if self.metadata else None
-        if latest_file:
-            if current_time - datetime.strptime(latest_file["time"], '%Y-%m-%d %H:%M:%S') > timedelta(seconds=CHUNK_INTERVAL):
-                file_name = latest_file["file_name"]
-                targets = latest_file['targets']
-            else:
-                file_name = get_file_name(current_time)
-                targets = random.sample(STORAGE_TARGETS, 2)
-                self.metadata.append({
-                    "time": current_time.strftime('%Y-%m-%d %H:%M:%S'),
-                    "file_name": file_name,
-                    "targets": targets
-                })
-                self._save_metadata()
-        else: 
+        if self.latest_file is None:
             file_name = get_file_name(current_time)
             targets = random.sample(STORAGE_TARGETS, 2)
             self.metadata.append({
@@ -83,6 +70,29 @@ class ObjectStorageManager:
                 "targets": targets
             })
             self._save_metadata()
+            self.latest_file = {
+                "time": current_time.strftime('%Y-%m-%d %H:%M:%S'),
+                "file_name": file_name,
+                "targets": targets
+            }
+        if current_time - datetime.strptime(self.latest_file["time"], '%Y-%m-%d %H:%M:%S') < timedelta(seconds=CHUNK_INTERVAL):
+            file_name = self.latest_file["file_name"]
+            targets = self.latest_file['targets']
+        else:
+            file_name = get_file_name(current_time)
+            targets = random.sample(STORAGE_TARGETS, 2)
+            self.metadata.append({
+                "time": current_time.strftime('%Y-%m-%d %H:%M:%S'),
+                "file_name": file_name,
+                "targets": targets
+            })
+            self._save_metadata()
+            self.latest_file = {
+                "time": current_time.strftime('%Y-%m-%d %H:%M:%S'),
+                "file_name": file_name,
+                "targets": targets
+            }
+
         # Prepare the data to send (including the filename in the request body)
         payload = {
             "data": data,
@@ -110,6 +120,7 @@ class ObjectStorageManager:
         """Prefetch files using the metadata stored in data_storage.json."""
         metadata = self._load_metadata()
         current_time = datetime.now()
+        print(f"Prefetching at {current_time}")
 
         # Filter out the metadata entries that are older than 30 minutes
         prefetched_files = []
@@ -127,7 +138,7 @@ class ObjectStorageManager:
                         response = await client.get(file_path)
                         response.raise_for_status()
                         # Store the file in the prefetched files list after successfully fetching it
-                        self.prefetched_files[entry['file_name']] = response.text
+                        self.prefetched_files[entry['file_name']] = response.json()
                         print(f"Prefetching: {file_path} - Status: {response.status_code}")
                 except httpx.HTTPStatusError as e:
                     print(f"File not found: {file_path} - Status: {e.response.status_code}")
@@ -135,7 +146,7 @@ class ObjectStorageManager:
                     print(f"Error fetching file {file_path}: {e}")
 
 # Create the FastAPI app and object storage manager
-app = FastAPI()
+app = FastAPI(redirect_slashes=False)
 osm = ObjectStorageManager()
 
 # HTTP POST endpoint to receive and store CSV rows
@@ -150,10 +161,11 @@ async def store_data(row: CSVRow):
 # HTTP GET endpoint to fetch data files from storage targets
 @app.get("/fetch_data/{file_name}")
 async def fetch_data(file_name: str):
-    try:
         # Check if the file is in the prefetched files list
         if file_name in osm.prefetched_files:
-            return {"message": f"File {file_name} already prefetched.", "file_name": file_name}
+            response = {"status": "success", "text": osm.prefetched_files[file_name]}
+            return {"message": f"File {file_name} already prefetched.", "response": response, 
+            }
 
         # If not in the prefetched list, proceed with fetching the file
         metadata = osm._load_metadata()
@@ -165,36 +177,23 @@ async def fetch_data(file_name: str):
         response = {}
         
         async with httpx.AsyncClient() as client:
-            for target_base_url in set(targets):  # Flatten the list and ensure uniqueness
+            for target_base_url in set(targets[0]):  # Flatten the list and ensure uniqueness
                 target_url = f"{target_base_url}/fetch_data/{file_name}"
                 # Ping target to check if online 
-                try: 
-                    resp = await client.get(target_url)
-                    resp.raise_for_status()
-
-                # These exceptions will return if this is the last target tried. I.e All targets failed
-                except httpx.HTTPStatusError as e:
-                    response = {"target": target_base_url, "status": f"failed ({e.resp.status_code})"}
-                    continue
-                except Exception as e:
-                    response = {"target": target_base_url, "status": f"failed ({str(e)})"}
-                    continue
-                try:
-                    resp = await client.get(target_url)
-                    resp.raise_for_status()
-                    responce = {"target": target_base_url, "status": "success", "text": resp.text}
-                    break
-                except httpx.HTTPStatusError as e:
-                    response = {"target": target_base_url, "status": f"failed ({e.response.status_code})"}
-                except Exception as e:
-                    response = {"target": target_base_url, "status": f"failed ({str(e)})"}
+                # try:
+                resp = await client.get(target_url)
+                resp.raise_for_status()
+                response = { "status": "success", "text": resp.json()}
+                break
+                # except httpx.HTTPStatusError as e:
+                #     response = {"target": target_base_url, "status": f"failed ({e.response.status_code})"}
+                # except Exception as e:
+                #     response = {"target": target_base_url, "status": f"failed ({str(e)})"}
 
         if response["status"] == "success":
             return {"message": "File fetched successfully", "response": response}
         else: 
             raise HTTPException(status_code=500, detail=f"Error fetching file: {response}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching data: {e}")
 
 # Endpoint to get the list of file names with timestamps
 @app.get("/file_list/")

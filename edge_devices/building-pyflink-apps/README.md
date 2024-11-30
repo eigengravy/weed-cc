@@ -32,3 +32,10 @@ docker exec jobmanager /opt/flink/bin/flink run \
     -d
 ```
 
+
+kafka see topics
+```
+docker exec -it kafka-0 bash
+
+kafka-console-consumer.sh -topic flagged_transactions -from-beginning -bootstrap-server 10.8.1.96:29092
+```
