@@ -17,6 +17,8 @@ services:
   storage_target_1:
     build: .
     command: uvicorn storage_target:app --host 0.0.0.0 --port 8001
+    environment:
+      - MY_URL=http://localhost:8001
     ports:
       - "8001:8001"  # Exposing port 8001 on the host
     volumes:
@@ -27,6 +29,8 @@ services:
   storage_target_2:
     build: .
     command: uvicorn storage_target:app --host 0.0.0.0 --port 8002
+    environment:
+      - MY_URL=http://localhost:8002
     ports:
       - "8002:8002"  # Exposing port 8002 on the host
     volumes:
@@ -37,8 +41,47 @@ services:
   storage_target_3:
     build: .
     command: uvicorn storage_target:app --host 0.0.0.0 --port 8003
+    environment:
+      - MY_URL=http://localhost:8003
     ports:
       - "8003:8003"  # Exposing port 8003 on the host
     volumes:
       - ./storage_target:/storage_data
     network_mode: "host"  # Use host network mode
+    
+  # Storage Target 4
+  storage_target_4:
+    build: .
+    command: uvicorn storage_target:app --host 0.0.0.0 --port 8004
+    environment:
+      - MY_URL=http://localhost:8004
+    ports:
+      - "8004:8004"  # Exposing port 8004 on the host
+    volumes:
+      - ./storage_target:/storage_data
+    network_mode: "host"  # Use host network mode
+
+  # Storage Target 5
+  storage_target_5:
+    build: .
+    command: uvicorn storage_target:app --host 0.0.0.0 --port 8005
+    environment:
+      - MY_URL=http://localhost:8005
+    ports:
+      - "8005:8005"  # Exposing port 8005 on the host
+    volumes:
+      - ./storage_target:/storage_data
+    network_mode: "host"  # Use host network mode
+
+  # Storage Target 6
+  storage_target_6:
+    build: .
+    command: uvicorn storage_target:app --host 0.0.0.0 --port 8006
+    environment:
+      - MY_URL=http://localhost:8006
+    ports:
+      - "8006:8006"  # Exposing port 8006 on the host
+    volumes:
+      - ./storage_target:/storage_data
+    network_mode: "host"  # Use host network mode
+

@@ -3,11 +3,17 @@ from pydantic import BaseModel
 import os
 import json
 import csv
+import httpx  # For making HTTP requests to storage targets
+
+
+
 
 app = FastAPI()
 
 # Directory to store files
 STORAGE_DIR = 'storage_data'
+MANAGER_URL = "http://localhost:8000"
+MY_URL = os.environ['MY_URL']
 
 # Ensure the directory exists
 if not os.path.exists(STORAGE_DIR):
@@ -63,5 +69,30 @@ async def fetch_data(filename: str) -> list:
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching data: {str(e)}")
+
+
+@app.get("/go_down")
+async def go_down():
+
+    os.system(f"rm -rf {STORAGE_DIR}")
+    return {"message": "I am down"}
+
+@app.get("/go_up")
+async def get_up():
+    # Curl the manager to get the storage target to go up
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(MANAGER_URL + "/buddy_sync/" + MY_URL)
+        resp.raise_for_status()
+        file_data = await resp.json()
+        # Save the files to the storage target
+        for file in file_data:
+            file_path = os.path.join(STORAGE_DIR, file['filename'])
+            with open(file_path, 'w') as f:
+                f.write(file['data'])
+        # except httpx.HTTPStatusError as e:
+        #     response = {"target": target_base_url, "status": f"failed ({e.response.status_code})"}
+        # except Exception as e:
+        #     response = {"target": target_base_url, "status": f"failed ({str(e)})"}
+    return {"message": "I am up"}
 
 # To run this: `uvicorn storage_target:app --reload`

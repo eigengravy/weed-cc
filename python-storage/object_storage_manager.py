@@ -10,13 +10,22 @@ import httpx  # For making HTTP requests to storage targets
 
 # Base URLs for the three storage targets (without the endpoints)
 STORAGE_TARGETS = [
-    'http://0.0.0.0:8001',  # Base URL for storage target 1
+    'http://0.0.0.0:8001',   # Base URL for storage target 1
     'http://0.0.0.0:8002',  # Base URL for storage target 2
     'http://0.0.0.0:8003',  # Base URL for storage target 3
 ]
 
-PREFETCH_INTERVAL = 3 * 60  # 30 minutes in seconds
-CHUNK_INTERVAL = 1* 60  # 10 minutes in seconds
+STORAGE_BUDDIES = {
+    'http://0.0.0.0:8001': 'http://0.0.0.0:8004',
+    'http://0.0.0.0:8002': 'http://0.0.0.0:8005',
+    'http://0.0.0.0:8003': 'http://0.0.0.0:8006',
+    'http://0.0.0.0:8004': 'http://0.0.0.0:8001',
+    'http://0.0.0.0:8005': 'http://0.0.0.0:8002',
+    'http://0.0.0.0:8006': 'http://0.0.0.0:8003'
+}
+
+PREFETCH_INTERVAL = 3 * 10  # 30 minutes in seconds
+CHUNK_INTERVAL = 1* 10  # 10 minutes in seconds
 METADATA_FILE = 'data_storage.json'
 
 # Helper function to get the filename for the current time (10-minute chunks)
@@ -54,7 +63,8 @@ class ObjectStorageManager:
         metadata = self._load_metadata()
         targets = [entry['targets'] for entry in metadata if entry['file_name'] == file_name]
         if not targets:
-            return random.sample(STORAGE_TARGETS, 2)
+            random_target = random.sample(STORAGE_TARGETS, 1)
+            return random_target + [STORAGE_BUDDIES[random_target[0]]]
         return targets[0]
 
     async def distribute_data(self, data: dict):
@@ -63,7 +73,7 @@ class ObjectStorageManager:
         current_time = datetime.now()
         if self.latest_file is None:
             file_name = get_file_name(current_time)
-            targets = random.sample(STORAGE_TARGETS, 2)
+            targets = self.get_targets(file_name)
             self.metadata.append({
                 "time": current_time.strftime('%Y-%m-%d %H:%M:%S'),
                 "file_name": file_name,
@@ -80,7 +90,7 @@ class ObjectStorageManager:
             targets = self.latest_file['targets']
         else:
             file_name = get_file_name(current_time)
-            targets = random.sample(STORAGE_TARGETS, 2)
+            targets = self.get_targets(file_name)
             self.metadata.append({
                 "time": current_time.strftime('%Y-%m-%d %H:%M:%S'),
                 "file_name": file_name,
@@ -104,15 +114,15 @@ class ObjectStorageManager:
             responses = []
             async with httpx.AsyncClient() as client:
                 for target_base_url in targets:
-                    try:
+                    # try:
                         target_url = f"{target_base_url}/store_data/"
                         response = await client.post(target_url, json=payload)
                         response.raise_for_status()  # Raise error for any HTTP issues
                         responses.append({"target": target_base_url, "status": "success"})
-                    except httpx.HTTPStatusError as e:
-                        responses.append({"target": target_base_url, "status": f"failed ({e.response.status_code})"})
-                    except Exception as e:
-                        responses.append({"target": target_base_url, "status": f"failed ({str(e)})"})
+                    # except httpx.HTTPStatusError as e:
+                    #     responses.append({"target": target_base_url, "status": f"failed ({e.response.status_code})"})
+                    # except Exception as e:
+                    #     responses.append({"target": target_base_url, "status": f"failed ({str(e)})"})
 
             return responses
 
@@ -145,6 +155,7 @@ class ObjectStorageManager:
                 except Exception as e:
                     print(f"Error fetching file {file_path}: {e}")
 
+
 # Create the FastAPI app and object storage manager
 app = FastAPI(redirect_slashes=False)
 osm = ObjectStorageManager()
@@ -152,11 +163,11 @@ osm = ObjectStorageManager()
 # HTTP POST endpoint to receive and store CSV rows
 @app.post("/store_data/")
 async def store_data(row: CSVRow):
-    try:
+    # try:
         result = await osm.distribute_data(row.data)
         return {"message": "Data stored successfully", "result": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error storing data: {e}")
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail=f"Error storing data: {e}")
 
 # HTTP GET endpoint to fetch data files from storage targets
 @app.get("/fetch_data/{file_name}")
@@ -210,6 +221,29 @@ async def file_list():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving file list: {e}")
 
+
+@app.get("/buddy_sync/{target}")
+async def buddy_sync(target: str):
+    # Get all the files stored in target and send those files to buddy
+    buddy = STORAGE_BUDDIES[target]
+    resp = []
+    async with httpx.AsyncClient() as client:
+        files = [entry['file_name'] for entry in osm.metadata if target in entry['targets']]
+        for file in files:
+            try:
+                response = await client.get(f"{buddy}/fetch_data/{file}")
+                response.raise_for_status()
+                data = response.json()
+                payload = {
+                    "data": data,
+                    "filename": file
+                }
+                resp.append(payload)
+            except httpx.HTTPStatusError as e:
+                raise HTTPException(status_code=500, detail=f"Error syncing files: {e}")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error syncing files: {e}")
+    return resp
 # Background task to periodically prefetch files every 30 minutes
 async def periodic_prefetch():
     while True:

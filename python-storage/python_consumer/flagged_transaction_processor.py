@@ -8,11 +8,11 @@ import json
 KAFKA_TOPIC = 'flagged_transactions'
 # KAFKA_TOPIC = 'transactions'
 KAFKA_BOOTSTRAP_SERVERS = '10.8.1.96:29092'
-STORAGE_MANAGER_URL = 'http://localhost:8000'
+STORAGE_MANAGER_URL = 'http://10.8.1.95:8000'
 STORE_ENDPOINT = f"{STORAGE_MANAGER_URL}/store_data/"
 FETCH_ENDPOINT = f"{STORAGE_MANAGER_URL}/fetch_data/"
 FILES_ENDPOINT = f"{STORAGE_MANAGER_URL}/file_list/"
-FETCH_INTERVAL = 3 * 60  # 30 minutes in seconds
+FETCH_INTERVAL = 3 * 10  # 30 minutes in seconds
 
 
 async def send_to_storage_manager(data):
@@ -84,7 +84,7 @@ async def fetch_and_summarize():
                     print("file", file_data)
                     transaction_count += len(file_data)
 
-                print(f"Summary: {transaction_count} transactions in the last 3 minutes.")
+                print(f"Summary: {transaction_count} transactions in the last 30 seconds.")
         except Exception as e:
             print(f"Error fetching or summarizing files: {e}")
 
